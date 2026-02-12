@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+#SBATCH -J cluster_effects
+#SBATCH --time=02:00:00
+#SBATCH -n 1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=64G
+#SBATCH -p leanew1,normal  # Queue names you can submit to
+# Outputs ----------------------------------
+#SBATCH -o logs/cluster_effects_%A.out
+#SBATCH -e logs/cluster_effects_%A.error
+#SBATCH --mail-user=rdivya@stanford.edu
+#SBATCH --mail-type=ALL
+# ------------------------------------------
+excel_dir="${OAK}/users/rdivya/tms/data/excel"
+clinical_df="${excel_dir}/inputs/data-agg_may2025.csv"
+schaefer_df="${excel_dir}/outputs/EField_99thPercentile_AvgCoil_Connected_FullSample_Schaefer400_WeightedStimMask_FC_20250731.xlsx"
+tian_df="${excel_dir}/outputs/EField_99thPercentile_AvgCoil_Connected_FullSample_TianS2_WeightedStimMask_FC_20250731.xlsx"
+sample_df="${excel_dir}/inputs/EFieldConnectome_FinalSample_20260204.xlsx"
+
+out_fp=$1
+shift 1
+args=$@
+
+ml python/3.9
+
+python3.9 -u cluster_effects.py ${clinical_df} ${schaefer_df} ${out_fp} --sub_list ${sample_df} ${args}

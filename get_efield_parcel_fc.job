@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+#SBATCH -J tms_stim_fc
+#SBATCH --time=12:00:00
+#SBATCH -n 1
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
+#SBATCH -p leanew1,normal  # Queue names you can submit to
+# Outputs ----------------------------------
+#SBATCH -o logs/stim_fc_%A.out
+#SBATCH -e logs/stim_fc_%A.error
+#SBATCH --mail-user=rdivya@stanford.edu
+#SBATCH --mail-type=ALL
+# ------------------------------------------
+excel_dir="${OAK}/users/rdivya/tms/data/excel"
+sample_df="${excel_dir}/inputs/EField_Sample_ToRun.xlsx"
+efield_df="${excel_dir}/outputs/EField_99.9thPercentile_Connected_FullSample_20250728.xlsx"
+
+out_fp=$1
+atlas_name=$2
+atlas_dir=$3
+nthreads=$4
+shift 4
+args=$@
+
+ml python/3.9
+
+python3.9 -u get_efield_parcel_fc.py ${sample_df} ${out_fp} ${atlas_name} ${atlas_dir} --nthreads ${nthreads} ${args}

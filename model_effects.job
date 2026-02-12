@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+#SBATCH -J tms_effects
+#SBATCH --time=2:00:00
+#SBATCH -n 1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=8G
+#SBATCH -p leanew1,normal  # Queue names you can submit to
+# Outputs ----------------------------------
+#SBATCH -o logs/effects_%A.out
+#SBATCH -e logs/effects_%A.error
+#SBATCH --mail-user=rdivya@stanford.edu
+#SBATCH --mail-type=ALL
+# ------------------------------------------
+excel_dir="${OAK}/users/rdivya/tms/data/excel"
+clinical_df="${excel_dir}/inputs/data-agg_may2025.csv"
+schaefer_df="${excel_dir}/outputs/EField_99thPercentile_AvgCoil_Connected_FullSample_Schaefer400_WeightedStimMask_FC_20250731.xlsx"
+tian_df="${excel_dir}/outputs/EField_99thPercentile_AvgCoil_Connected_FullSample_TianS2_WeightedStimMask_FC_20250731.xlsx"
+cluster_df="${excel_dir}/outputs/EField_99thPercentile_AvgCoil_Connected_FullSample_SchaeferNetwork_Overlap_4Clusters_20250813.xlsx"
+#schaefer_df="${excel_dir}/outputs/EField_ParcelMagnitude_Schaefer400_20250730.xlsx"
+#tian_df="${excel_dir}/outputs/EField_ParcelMagnitude_TianS2_20250730.xlsx"
+
+out_fp=$1
+shift 1
+args=$@
+
+ml python/3.9
+
+python3.9 -u model_effects.py ${clinical_df} ${out_fp} --atlases ${schaefer_df} ${args}

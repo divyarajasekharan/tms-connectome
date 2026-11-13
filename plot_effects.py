@@ -26,13 +26,12 @@ my_cmap1 = colors.LinearSegmentedColormap.from_list('my_gradient', (
                  (1.000, (0.439, 0.055, 0.310))))
 
 def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel", 
-                         stat="psize", vars=[], alpha=0.05, fc_threshold=None, 
+                         stat="psize", vars=[], alpha=0.05, 
                          flip_valence=False, see_all = False, svg=False, 
                          views = {"lh": {"lateral" : [0, 180], "medial" : [0, 0]},
                                  "rh": {"lateral" : [0, 0], "medial" : [0, 180]}}, 
-                        t_max=None, cmap='RdBu_r'): 
+                        t_max=None, cmap='RdBu_r', plot_boundaries=False): 
 
-    print("Hi from plotting!")
     # extract results associated with outcome 
     results_df = results_df[results_df.outcome == outcome]    
     results_df.reset_index(drop=True, inplace=True)
@@ -40,7 +39,7 @@ def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel",
     cluster_df = cluster_df[cluster_df.outcome == outcome]
     cluster_df.reset_index(drop=True, inplace=True)
 
-    # hack-y
+    # hack to visualize all parcel t-stats
     if see_all:
         cluster_df[f"p_perm_{stat}"] = 0 
 
@@ -74,7 +73,7 @@ def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel",
 
         # load schaefer atlas 
         atlas_fp =f"{ATLAS_DIR}/Schaefer/fsaverage/{hemi}.Schaefer2018_400Parcels_17Networks_order.annot"
-        labels, color_lut, names = nib.freesurfer.io.read_annot(atlas_fp)
+        labels, _, names = nib.freesurfer.io.read_annot(atlas_fp)
 
         names = [str(name).strip("b'") for name in names]
 
@@ -126,10 +125,11 @@ def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel",
         color_tri[p_tri >= alpha] = colors.to_rgba('lightgrey')
 
         # extract parcel boundaries and color black 
-        bdry_tri = np.array([not np.all(labels[tri] == labels[tri[0]]) 
-                            for tri in triangles]).astype(bool)
-            
-        color_tri[bdry_tri] = colors.to_rgba('dimgrey')
+        if plot_boundaries:
+            bdry_tri = np.array([not np.all(labels[tri] == labels[tri[0]]) 
+                                for tri in triangles]).astype(bool)
+                
+            color_tri[bdry_tri] = colors.to_rgba('dimgrey')
 
         # set up axis views for plotting 
 
@@ -154,7 +154,7 @@ def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel",
             elev, azim = angles
             ax.view_init(elev=elev, azim=azim) # azim=135
 
-            fig_dir = f"figs/clusters/manuscript_final/fc-{fc_threshold}/{outcome}/"
+            fig_dir = f"figs/clusters/transl_psych_revision/{outcome}/"
             os.makedirs(fig_dir, exist_ok=True)
 
             fn = f"{outcome}_vs_{effect}_cluster-{stat}_schaefer400_{hemi}_{view}"
@@ -166,16 +166,21 @@ def plot_cluster_effects(cluster_df, results_df, outcome, effect="parcel",
 
 def plot_effects(results_df, outcome, effect="parcel", F_stat=False, 
                  corrected=False, vars=[], alpha=0.05, flip_valence=False,
-                 cmap='RdBu_r',
+                 cmap='RdBu_r', see_all=False, plot_boundaries=False, t_max=None,
                  views = {"lh": {"lateral" : [0, 180], "medial" : [0, 0]},
                                  "rh": {"lateral" : [0, 0], "medial" : [0, 180]}}): 
+
+    # add custom dorsolateral prefrontal view angle 
+    #views["lh"]["dorsolateral"] = [10, 170]
 
     # extract results associated with outcome 
     results_df = results_df[results_df.outcome == outcome]    
     results_df.reset_index(drop=True, inplace=True)
 
     # extract p-values and t-values for parcel coefficient
-    if corrected:
+    if see_all:
+        p_values = np.zeros(400)
+    elif corrected:
         p_values = results_df[f"p_{effect}_corr"].to_numpy()
     else:
         p_values = results_df[f"p_{effect}"].to_numpy()
@@ -201,8 +206,9 @@ def plot_effects(results_df, outcome, effect="parcel", F_stat=False,
 
     # set up colormap to normalize over range of observed test statistics 
     cmap = cm[cmap]
-    t_max = np.nanmax(np.abs(t_values))
-    print(t_max)
+
+    if t_max is None:
+        t_max = np.nanmax(np.abs(t_values))
 
     norm = colors.Normalize(vmin = -t_max, 
                             vmax = t_max)
@@ -239,22 +245,21 @@ def plot_effects(results_df, outcome, effect="parcel", F_stat=False,
         p_values_hemi = np.insert(p_values_hemi, 0, 1)
         t_values_hemi = np.insert(t_values_hemi, 0, 0) 
 
-        print(np.min(label_tri))
-        print(np.max(label_tri))
-
         p_tri = p_values_hemi[label_tri]
         t_tri = t_values_hemi[label_tri]
 
         color_tri = cmap(norm(t_tri))
         
         # mask out non-significant parcels
-        grey = colors.to_rgba('lightgrey')
+        grey = colors.to_rgba('lightgrey') # 'snow'
         color_tri[p_tri >= alpha] = grey
 
         # extract parcel boundaries & color black 
-        bdry_tri = np.array([not np.all(labels[tri] == labels[tri[0]]) 
-                            for tri in triangles]).astype(bool)            
-        color_tri[bdry_tri] = colors.to_rgba('dimgrey')
+
+        if plot_boundaries:
+            bdry_tri = np.array([not np.all(labels[tri] == labels[tri[0]]) 
+                                for tri in triangles]).astype(bool)            
+            color_tri[bdry_tri] = colors.to_rgba('dimgrey')
 
         # set up axis views for plotting 
 
@@ -274,16 +279,18 @@ def plot_effects(results_df, outcome, effect="parcel", F_stat=False,
             label = "$F$"
         else:
             label = "$t$"
-        plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax = ax, 
+        cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax = ax, 
                     shrink = 0.4, 
                     orientation = 'horizontal', 
                     label = label, pad = -.15)
+
+        cbar.ax.set_xticks(np.linspace(-t_max, t_max, 5))
 
         for view, angles in views[hemi].items():
             elev, azim = angles
             ax.view_init(elev=elev, azim=azim) # azim=135
             
-            fig_dir = f"figs/parcels/alpha-{alpha}/{outcome}/"
+            fig_dir = f"figs/parcels/predictor-ParcelFC/all/{outcome}/"
             os.makedirs(fig_dir, exist_ok=True)
 
             fn = f"{outcome}_vs_{effect}_schaefer400_{hemi}_{view}.png"
@@ -557,8 +564,17 @@ def generate_parser():
     
     parser.add_argument("results_df", 
                         help="File path to data frame storing parcel-wise model fits.")
-    parser.add_argument("--effect", default='parcel', help="Effect of interest")
-    parser.add_argument("--outcomes", nargs='+', default=[], help="Outcome variables to test.")
+    
+    parser.add_argument("--effect", default='interaction_session2_parcel', 
+                        help="Effect of interest")
+
+    parser.add_argument("--outcomes", nargs='+', default=["qids_tot", "pcl5_tot", 
+                                                          "vr36_emo_wellbeing", 
+                                                          "vr36_energy", 
+                                                          "vr36_role_limit_emo", 
+                                                          "vr36_soc_fx"],
+                        help="Outcome variables to test.")
+    
     parser.add_argument("--vars", nargs='+', default=[], help="Variables used to determine direction of effect")
     parser.add_argument("--cluster", action="store_true", help="Whether to plot cluster-wise effects.")
     parser.add_argument("--alpha", default=0.05, type=float, help="Cluster-forming threshold used.")
@@ -569,11 +585,12 @@ def generate_parser():
     parser.add_argument("--F_stat", action='store_true')
     parser.add_argument("--corrected", action='store_true')
     parser.add_argument("--see_all", action='store_true')
-    parser.add_argument("--fc_threshold", type=str, 
+    parser.add_argument("--fc_threshold", type=str, default="95thPercentile",
                         help="Connectivity threshold used to define parcel adjacency.")
     parser.add_argument("--svg", action='store_true', help="Save figures as svg files.")
     parser.add_argument("--t_max", type=float, help="Absolute value of boundary for color bar.")
     parser.add_argument("--cmap", default='RdBu_r')
+    parser.add_argument("--plot_boundaries", action='store_true')
 
     # plot parcel wise FC for a single subject & session
     parser.add_argument("--plot_fc", action='store_true')
@@ -586,7 +603,6 @@ def generate_parser():
     parser.add_argument("--parcels", nargs='+', default=[], type=int)
     parser.add_argument("--mask_name")
     parser.add_argument("--mask_color")
-
 
     # plot model coefficients in schaefer atlas
     parser.add_argument("--plot_coef", action='store_true')
@@ -604,7 +620,7 @@ if __name__ == "__main__":
 
     results_df = pd.read_excel(args.results_df)
 
-    if args.cluster: 
+    if args.cluster_df is not None:
         cluster_df = pd.read_excel(args.cluster_df)
     
     flip_valence = {"qids_tot" : True, "pcl5_tot" : True, 
@@ -629,13 +645,16 @@ if __name__ == "__main__":
         elif args.cluster:
             plot_cluster_effects(cluster_df, results_df, outcome, args.effect, 
                              stat=args.cluster_stat, alpha=args.alpha,
-                             vars=args.vars, fc_threshold=args.fc_threshold, 
+                             vars=args.vars, 
                              flip_valence = flip_valence[outcome], 
                              see_all=args.see_all, svg=args.svg, 
-                             t_max=args.t_max, cmap = args.cmap)
+                             t_max=args.t_max, cmap = args.cmap,
+                             plot_boundaries=args.plot_boundaries)
         else:
             plot_effects(results_df, outcome, effect=args.effect, 
                         F_stat=args.F_stat, alpha=args.alpha, 
                         flip_valence = flip_valence[outcome], 
-                        cmap=args.cmap,
-                        corrected=args.corrected, vars=args.vars)
+                        cmap=args.cmap, see_all=args.see_all,
+                        corrected=args.corrected, vars=args.vars,
+                        plot_boundaries=args.plot_boundaries, 
+                        t_max=args.t_max)
